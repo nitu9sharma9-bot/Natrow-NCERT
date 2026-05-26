@@ -1,0 +1,90 @@
+<a class="user-card" href="/profile" style="text-decoration:none;">
+  <div class="avatar">
+    {% if current_user.avatar %}
+    <img src="{{ current_user.avatar }}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">
+    {% else %}
+    {{ current_user.username[0].upper() }}
+    {% endif %}
+  </div>
+  <div>
+    <div class="user-name">{{ current_user.username }}</div>
+    <div class="user-role">{{ current_user.exam }} Aspirant</div>
+  </div>
+  <div class="user-dots">⋯</div>
+</a>
+
+
+
+{ 
+  class: '12', 
+  subject: 'Physics', 
+  title: 'New Physics Book', 
+  part: 'Part 1', 
+  color: '#60a5fa', 
+  icon: '⚡', 
+  url: 'https://ncert.nic.in/textbook/pdf/NEWURL.zip' 
+},
+
+
+
+
+
+
+
+
+
+
+
+
+@anurag14raj14
+
+
+
+
+
+
+
+
+
+
+@app.route("/nodes", methods=["GET", "POST"])
+@login_required
+def nodes():
+    conn = get_db()
+    cur = conn.cursor()
+    uid = current_user.id
+
+    if request.method == "POST":
+        action = request.form.get("action")
+        if action == "add":
+            cur.execute(
+                "INSERT INTO nodes(user_id, subject, question, answer, x, y, color) VALUES(?,?,?,?,?,?,?)",
+                (uid, request.form["subject"], request.form["question"],
+                 request.form["answer"], request.form.get("x", 100),
+                 request.form.get("y", 100), request.form.get("color", "#7c6ff7"))
+            )
+            conn.commit()
+
+    all_nodes = cur.execute("SELECT * FROM nodes WHERE user_id=?", (uid,)).fetchall()
+    all_conns = cur.execute("SELECT * FROM node_connections WHERE user_id=?", (uid,)).fetchall()
+    conn.close()
+
+    return render_template("nodes.html",
+        nodes=[dict(n) for n in all_nodes],
+        connections=[dict(c) for c in all_conns]
+    )
+
+
+
+
+AIzaSyADKFmyS3u6vk0Y7r2xy7nFKCvUaSasKS4
+
+
+
+
+  
+
+
+
+
+    <a class="nav-item" href="/doubt"><span class="nav-icon">🤖</span> AI Doubt</a>

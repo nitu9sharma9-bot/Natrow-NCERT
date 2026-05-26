@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Doubt Solver — StudyOS</title>
+<style>
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --bg: #08090d; --bg2: #0f1117; --bg3: #161820;
+    --surface: rgba(255,255,255,0.04); --surface2: rgba(255,255,255,0.08);
+    --border: rgba(255,255,255,0.08); --border2: rgba(255,255,255,0.14);
+    --text: #eeeef0; --muted: rgba(238,238,240,0.45); --muted2: rgba(238,238,240,0.25);
+    --accent: #7c6ff7; --green: #22c55e; --green-dim: rgba(34,197,94,0.15);
+    --gold: #f59e0b; --gold-dim: rgba(245,158,11,0.12);
+    --red: #f87171; --red-dim: rgba(248,113,113,0.12);
+    --sidebar-w: 240px; --radius: 16px; --radius-sm: 10px;
+  }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg); color: var(--text); min-height: 100vh; overflow-x: hidden;
+  }
+  body::before {
+    content: ''; position: fixed; inset: 0;
+    background:
+      radial-gradient(ellipse 60% 50% at 80% 10%, rgba(124,111,247,0.12) 0%, transparent 60%),
+      radial-gradient(ellipse 40% 40% at 10% 80%, rgba(245,158,11,0.07) 0%, transparent 55%);
+    pointer-events: none; z-index: 0;
+  }
+
+  /* SIDEBAR */
+  .sidebar {
+    position: fixed; top: 0; left: 0; width: var(--sidebar-w); height: 100vh;
+    background: var(--bg2); border-right: 1px solid var(--border);
+    display: flex; flex-direction: column; padding: 28px 0; z-index: 100;
+    transition: transform 0.3s ease;
+  }
+  .logo { padding: 0 24px 28px; border-bottom: 1px solid var(--border); margin-bottom: 20px; }
+  .logo-mark { font-size: 22px; font-weight: 800; letter-spacing: -0.5px; }
+  .logo-mark span { color: var(--accent); }
+  .logo-sub { font-size: 11px; color: var(--muted); margin-top: 2px; letter-spacing: 1px; text-transform: uppercase; }
+  .nav-section { padding: 0 12px; margin-bottom: 8px; }
+  .nav-label { font-size: 10px; color: var(--muted2); letter-spacing: 1.2px; text-transform: uppercase; padding: 0 12px; margin-bottom: 6px; }
+  .nav-item {
+    display: flex; align-items: center; gap: 12px; padding: 10px 14px;
+    border-radius: var(--radius-sm); font-size: 14px; font-weight: 500; color: var(--muted);
+    cursor: pointer; transition: all 0.15s; text-decoration: none; position: relative;
+  }
+  .nav-item:hover { background: var(--surface); color: var(--text); }
+  .nav-item.active { background: rgba(124,111,247,0.12); color: var(--accent); }
+  .nav-item.active::before {
+    content: ''; position: absolute; left: 0; top: 20%; bottom: 20%;
+    width: 3px; background: var(--accent); border-radius: 0 3px 3px 0;
+  }
+  .nav-icon { font-size: 17px; width: 22px; text-align: center; flex-shrink: 0; }
+  .sidebar-footer { margin-top: auto; padding: 20px 12px 0; border-top: 1px solid var(--border); }
+  .user-card {
+    display: flex; align-items: center; gap: 12px; padding: 12px 14px;
+    background: var(--surface); border-radius: var(--radius-sm);
+    cursor: pointer; transition: background 0.15s; text-decoration: none; color: var(--text);
+  }
+  .user-card:hover { background: var(--surface2); }
+  .avatar {
+    width: 36px; height: 36px; border-radius: 50%;
+    background: linear-gradient(135deg, var(--accent), #a78bfa);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px; font-weight: 700; flex-shrink: 0; overflow: hidden;
+  }
+  .avatar img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
+  .user-name { font-size: 13px; font-weight: 600; }
+  .user-role { font-size: 11px; color: var(--muted); }
+  .user-dots { color: var(--muted); font-size: 16px; margin-left: auto; }
+
+  .hamburger {
+    display: none; position: fixed; top: 16px; left: 16px;
+    width: 40px; height: 40px; background: var(--bg2);
+    border: 1px solid var(--border); border-radius: var(--radius-sm);
+    cursor: pointer; z-index: 200;
+    align-items: center; justify-content: center; flex-direction: column; gap: 5px;
+  }
+  .hamburger span { display: block; width: 18px; height: 2px; background: var(--text); border-radius: 2px; }
+  .overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 99; }
+
+  .main { margin-left: var(--sidebar-w); min-height: 100vh; position: relative; z-index: 1; }
+  .topbar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 20px 32px; border-bottom: 1px solid var(--border);
+    background: rgba(8,9,13,0.7); position: sticky; top: 0; z-index: 50;
+  }
+  .topbar-left h1 { font-size: 20px; font-weight: 800; letter-spacing: -0.3px; }
+  .topbar-left p { font-size: 13px; color: var(--muted); margin-top: 1px; }
+  .back-btn {
+    display: flex; align-items: center; gap: 8px;
+    background: var(--surface); border: 1px solid var(--border);
+    color: var(--muted); padding: 8px 16px; border-radius: var(--radius-sm);
+    font-size: 13px; font-weight: 500; text-decoration: none; transition: all 0.15s;
+  }
+  .back-btn:hover { background: var(--surface2); color: var(--text); }
+
+  .content { padding: 28px 32px; max-width: 900px; }
+
+  .section-title {
+    font-size: 16px; font-weight: 600; margin-bottom: 16px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .section-title::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+  /* ASK BOX */
+  .ask-card {
+    background: var(--bg2); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 24px; margin-bottom: 28px;
+    position: relative; overflow: hidden;
+  }
+  .ask-card::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+    background: linear-gradient(90deg, #7c6ff7, #a78bfa, #22c55e);
+  }
+  .ask-header { display: flex; align-items: center; gap: 14px; margin-bottom: 18px; }
+  .ask-icon {
+    width: 46px; height: 46px; border-radius: var(--radius-sm);
+    background: var(--gold-dim); border: 1px solid rgba(245,158,11,0.2);
+    display: flex; align-items: center; justify-content: center; font-size: 22px;
+  }
+  .ask-title { font-size: 18px; font-weight: 800; margin-bottom: 3px; }
+  .ask-sub { font-size: 13px; color: var(--muted); }
+
+  .subject-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+  .subj-btn {
+    padding: 6px 14px; background: var(--surface);
+    border: 1px solid var(--border); border-radius: 20px;
+    font-size: 12px; font-weight: 600; color: var(--muted);
+    cursor: pointer; transition: all 0.15s; font-family: inherit;
+  }
+  .subj-btn:hover { background: var(--surface2); color: var(--text); }
+  .subj-btn.active { background: rgba(124,111,247,0.15); border-color: rgba(124,111,247,0.4); color: var(--accent); }
+
+  .ask-input-wrap { position: relative; margin-bottom: 12px; }
+  .ask-textarea {
+    width: 100%; padding: 14px 16px;
+    background: rgba(255,255,255,0.05); border: 1px solid var(--border);
+    border-radius: var(--radius-sm); color: var(--text);
+    font-family: inherit; font-size: 15px; line-height: 1.6;
+    resize: none; outline: none; transition: border-color 0.15s;
+    min-height: 100px;
+  }
+  .ask-textarea:focus { border-color: var(--accent); background: rgba(124,111,247,0.04); }
+  .ask-textarea::placeholder { color: var(--muted2); }
+
+  .ask-btn {
+    width: 100%; padding: 13px;
+    background: linear-gradient(135deg, #6c63ff, #8b5cf6);
+    border: none; border-radius: var(--radius-sm); color: white;
+    font-family: inherit; font-size: 15px; font-weight: 700;
+    cursor: pointer; transition: all 0.15s;
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+  }
+  .ask-btn:hover { opacity: 0.9; transform: translateY(-1px); }
+  .ask-btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+
+  /* TYPING INDICATOR */
+  .typing {
+    display: none; align-items: center; gap: 8px;
+    padding: 14px 18px; background: rgba(124,111,247,0.08);
+    border: 1px solid rgba(124,111,247,0.2); border-radius: var(--radius-sm);
+    margin-bottom: 12px; font-size: 14px; color: var(--accent);
+  }
+  .typing.show { display: flex; }
+  .typing-dots { display: flex; gap: 4px; }
+  .typing-dots span {
+    width: 6px; height: 6px; border-radius: 50%; background: var(--accent);
+    animation: bounce 1.2s infinite;
+  }
+  .typing-dots span:nth-child(2) { animation-delay: 0.2s; }
+  .typing-dots span:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes bounce {
+    0%, 60%, 100% { transform: translateY(0); }
+    30% { transform: translateY(-6px); }
+  }
+
+  /* ANSWER PREVIEW */
+  .answer-preview {
+    display: none; background: rgba(34,197,94,0.06);
+    border: 1px solid rgba(34,197,94,0.2); border-radius: var(--radius-sm);
+    padding: 18px; margin-bottom: 12px;
+  }
+  .answer-preview.show { display: block; }
+  .answer-preview-label { font-size: 11px; color: var(--green); font-weight: 700; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 10px; }
+  .answer-preview-text { font-size: 14px; line-height: 1.8; color: var(--text); white-space: pre-wrap; }
+  .answer-save-btn {
+    margin-top: 12px; padding: 8px 20px;
+    background: var(--green-dim); border: 1px solid rgba(34,197,94,0.3);
+    border-radius: var(--radius-sm); color: var(--green);
+    font-size: 13px; font-weight: 600; cursor: pointer;
+    font-family: inherit; transition: all 0.15s;
+  }
+  .answer-save-btn:hover { background: rgba(34,197,94,0.2); }
+
+  /* DOUBT HISTORY */
+  .doubt-card {
+    background: var(--bg2); border: 1px solid var(--border);
+    border-radius: var(--radius); margin-bottom: 14px;
+    overflow: hidden; transition: border-color 0.2s;
+  }
+  .doubt-card:hover { border-color: var(--border2); }
+
+  .doubt-q {
+    display: flex; align-items: flex-start; gap: 12px;
+    padding: 16px 20px; border-bottom: 1px solid var(--border);
+    cursor: pointer; transition: background 0.15s;
+  }
+  .doubt-q:hover { background: var(--surface); }
+  .doubt-q-icon {
+    width: 32px; height: 32px; border-radius: var(--radius-sm);
+    background: var(--gold-dim); display: flex; align-items: center;
+    justify-content: center; font-size: 15px; flex-shrink: 0; margin-top: 1px;
+  }
+  .doubt-q-text { flex: 1; font-size: 14px; font-weight: 600; line-height: 1.5; }
+  .doubt-q-meta { display: flex; gap: 8px; align-items: center; margin-top: 4px; }
+  .doubt-tag {
+    font-size: 11px; padding: 2px 8px; border-radius: 20px;
+    background: rgba(124,111,247,0.12); color: var(--accent); font-weight: 500;
+  }
+  .doubt-time { font-size: 11px; color: var(--muted2); }
+  .doubt-toggle { font-size: 16px; color: var(--muted2); flex-shrink: 0; transition: transform 0.2s; }
+  .doubt-card.open .doubt-toggle { transform: rotate(180deg); }
+
+  .doubt-a {
+    display: none; padding: 18px 20px;
+    font-size: 13px; line-height: 1.8; color: var(--muted);
+    white-space: pre-wrap; border-bottom: 1px solid var(--border);
+    background: rgba(34,197,94,0.03);
+  }
+  .doubt-card.open .doubt-a { display: block; }
+
+  .doubt-actions { display: flex; gap: 8px; padding: 10px 20px; }
+  .doubt-del {
+    padding: 5px 12px; background: var(--red-dim);
+    border: 1px solid rgba(248,113,113,0.2); border-radius: var(--radius-sm);
+    color: var(--red); font-size: 12px; font-weight: 600;
+    cursor: pointer; font-family: inherit; transition: all 0.15s;
+  }
+  .doubt-del:hover { background: rgba(248,113,113,0.2); }
+
+  /* EMPTY */
+  .empty {
+    text-align: center; padding: 40px 20px;
+    background: var(--bg2); border: 1px dashed var(--border2);
+    border-radius: var(--radius);
+  }
+  .empty-icon { font-size: 36px; margin-bottom: 10px; }
+  .empty-title { font-size: 15px; font-weight: 600; margin-bottom: 5px; }
+  .empty-sub { font-size: 13px; color: var(--muted); }
+
+  /* STATS */
+  .stats-row { display: grid; grid-template-columns: repeat(3,1fr); gap: 14px; margin-bottom: 24px; }
+  .stat-card { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 20px; }
+  .stat-num { font-size: 26px; font-weight: 800; margin-bottom: 4px; }
+  .stat-num.purple { color: var(--accent); }
+  .stat-num.green { color: var(--green); }
+  .stat-num.gold { color: var(--gold); }
+  .stat-label { font-size: 12px; color: var(--muted); }
+
+  @media (max-width: 900px) {
+    .sidebar { transform: translateX(-100%); }
+    .sidebar.open { transform: translateX(0); }
+    .overlay.open { display: block; }
+    .hamburger { display: flex; }
+    .main { margin-left: 0; }
+    .topbar { padding: 16px 20px; padding-left: 68px; }
+    .content { padding: 20px 16px; }
+    .stats-row { grid-template-columns: 1fr 1fr; }
+  }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(16px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .ask-card { animation: fadeUp 0.3s ease both; }
+  .stats-row { animation: fadeUp 0.3s 0.05s ease both; }
+</style>
+</head>
+<body>
+
+<aside class="sidebar" id="sidebar">
+  <div class="logo">
+    <div class="logo-mark">Study<span>OS</span></div>
+    <div class="logo-sub">JEE 2025 Dashboard</div>
+  </div>
+  <div class="nav-section">
+    <div class="nav-label">Main</div>
+    <a class="nav-item" href="/"><span class="nav-icon">⊞</span> Dashboard</a>
+    <a class="nav-item" href="/planner"><span class="nav-icon">📚</span> Planner</a>
+    <a class="nav-item" href="/schedule"><span class="nav-icon">📔</span> Schedule</a>
+    <a class="nav-item" href="/progress"><span class="nav-icon">📈</span> Progress</a>
+  </div>
+  <div class="nav-section" style="margin-top:10px;">
+    <div class="nav-label">Resources</div>
+    <a class="nav-item" href="/ncert_pdf"><span class="nav-icon">📘</span> NCERT</a>
+    <a class="nav-item" href="/documentary"><span class="nav-icon">🎬</span> Documentary</a>
+    <a class="nav-item" href="/leaderboard"><span class="nav-icon">🏆</span> Leaderboard</a>
+    <a class="nav-item" href="/notes"><span class="nav-icon">📝</span> Notes</a>
+    <a class="nav-item" href="/flashcards"><span class="nav-icon">🃏</span> Flashcards</a>
+    <a class="nav-item" href="/nodes"><span class="nav-icon">🧠</span> Nodes</a>
+    <a class="nav-item active" href="/doubt"><span class="nav-icon">🤖</span> AI Doubt</a>
+  </div>
+  <div class="sidebar-footer">
+    <a class="user-card" href="/profile">
+      <div class="avatar">
+        {% if current_user.avatar %}
+        <img src="{{ current_user.avatar }}">
+        {% else %}
+        {{ current_user.username[0].upper() }}
+        {% endif %}
+      </div>
+      <div>
+        <div class="user-name">{{ current_user.username }}</div>
+        <div class="user-role">{{ current_user.exam }} Aspirant</div>
+      </div>
+      <div class="user-dots">⋯</div>
+    </a>
+  </div>
+</aside>
+
+<button class="hamburger" id="hamburger" onclick="toggleSidebar()">
+  <span></span><span></span><span></span>
+</button>
+<div class="overlay" id="overlay" onclick="toggleSidebar()"></div>
+
+<main class="main">
+  <div class="topbar">
+    <div class="topbar-left">
+      <h1>🤖 AI Doubt Solver</h1>
+      <p>Ask anything — get instant expert answers</p>
+    </div>
+    <a class="back-btn" href="/">← Home</a>
+  </div>
+
+  <div class="content">
+
+    <!-- STATS -->
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="stat-num purple">{{ doubts|length }}</div>
+        <div class="stat-label">🤖 Doubts Solved</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-num green" id="todayCount">0</div>
+        <div class="stat-label">📅 Today</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-num gold" id="subjectCount">0</div>
+        <div class="stat-label">📚 Subjects</div>
+      </div>
+    </div>
+
+    <!-- ASK BOX -->
+    <div class="section-title">Ask a Doubt</div>
+    <div class="ask-card">
+      <div class="ask-header">
+        <div class="ask-icon">🤖</div>
+        <div>
+          <div class="ask-title">Gemini AI Tutor</div>
+          <div class="ask-sub">Powered by Google Gemini — ask anything about your syllabus</div>
+        </div>
+      </div>
+
+      <!-- SUBJECT SELECTOR -->
+      <div class="subject-row" id="subjectRow">
+        {% for s in ['Physics','Chemistry','Maths','Biology','History','Geography','Economics','English','General'] %}
+        <button class="subj-btn {{ 'active' if loop.first else '' }}"
+          onclick="selectSubject('{{ s }}', this)">{{ s }}</button>
+        {% endfor %}
+      </div>
+
+      <div class="ask-input-wrap">
+        <textarea class="ask-textarea" id="doubtInput"
+          placeholder="Type your doubt here... e.g. 'Explain Coulomb's Law with examples' or 'How to solve integration by parts?'"
+          rows="4"></textarea>
+      </div>
+
+      <!-- TYPING INDICATOR -->
+      <div class="typing" id="typing">
+        <div class="typing-dots">
+          <span></span><span></span><span></span>
+        </div>
+        Gemini is thinking...
+      </div>
+
+      <!-- ANSWER PREVIEW -->
+      <div class="answer-preview" id="answerPreview">
+        <div class="answer-preview-label">✅ AI Answer</div>
+        <div class="answer-preview-text" id="answerText"></div>
+        <button class="answer-save-btn" onclick="saveAnswer()">💾 Save to History</button>
+      </div>
+
+      <button class="ask-btn" id="askBtn" onclick="askDoubt()">
+        🤖 Ask Gemini
+      </button>
+    </div>
+
+    <!-- HISTORY -->
+    <div class="section-title">Doubt History</div>
+
+    {% if doubts %}
+      {% for d in doubts %}
+      <div class="doubt-card" id="dc-{{ d['id'] }}">
+        <div class="doubt-q" onclick="toggleDoubt({{ d['id'] }})">
+          <div class="doubt-q-icon">❓</div>
+          <div style="flex:1;">
+            <div class="doubt-q-text">{{ d['question'] }}</div>
+            <div class="doubt-q-meta">
+              <span class="doubt-tag">{{ d['subject'] }}</span>
+              <span class="doubt-time">{{ d['created_at'][:16] if d['created_at'] else '' }}</span>
+            </div>
+          </div>
+          <div class="doubt-toggle">▾</div>
+        </div>
+        <div class="doubt-a">{{ d['answer'] }}</div>
+        <div class="doubt-actions">
+          <button class="doubt-del" onclick="deleteDoubt({{ d['id'] }})">🗑️ Delete</button>
+        </div>
+      </div>
+      {% endfor %}
+    {% else %}
+      <div class="empty">
+        <div class="empty-icon">🤖</div>
+        <div class="empty-title">No doubts yet</div>
+        <div class="empty-sub">Ask your first question above!</div>
+      </div>
+    {% endif %}
+
+  </div>
+</main>
+
+<script>
+  let selectedSubject = 'Physics';
+  let currentAnswer = '';
+  let currentQuestion = '';
+
+  function toggleSidebar() {
+    document.getElementById('sidebar').classList.toggle('open');
+    document.getElementById('overlay').classList.toggle('open');
+  }
+
+  function selectSubject(subject, el) {
+    selectedSubject = subject;
+    document.querySelectorAll('.subj-btn').forEach(b => b.classList.remove('active'));
+    el.classList.add('active');
+  }
+
+  async function askDoubt() {
+    const question = document.getElementById('doubtInput').value.trim();
+    if (!question) { alert('Please type your doubt first!'); return; }
+
+    const btn = document.getElementById('askBtn');
+    btn.disabled = true;
+    btn.innerHTML = '⏳ Thinking...';
+
+    document.getElementById('typing').classList.add('show');
+    document.getElementById('answerPreview').classList.remove('show');
+
+    try {
+      const res = await fetch('/ask_doubt', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question, subject: selectedSubject })
+      });
+      const data = await res.json();
+      currentAnswer = data.answer;
+      currentQuestion = question;
+
+      document.getElementById('answerText').textContent = data.answer;
+      document.getElementById('answerPreview').classList.add('show');
+      document.getElementById('typing').classList.remove('show');
+
+    } catch(e) {
+      document.getElementById('typing').classList.remove('show');
+      alert('Error connecting to AI. Try again!');
+    }
+
+    btn.disabled = false;
+    btn.innerHTML = '🤖 Ask Gemini';
+  }
+
+  function saveAnswer() {
+    // Already saved in ask_doubt route — just reload to show in history
+    location.reload();
+  }
+
+  function toggleDoubt(id) {
+    const card = document.getElementById('dc-' + id);
+    card.classList.toggle('open');
+  }
+
+  function deleteDoubt(id) {
+    if (!confirm('Delete this doubt?')) return;
+    fetch('/delete_doubt/' + id, { method: 'POST' })
+    .then(() => {
+      document.getElementById('dc-' + id).remove();
+    });
+  }
+
+  // STATS
+  window.addEventListener('DOMContentLoaded', () => {
+    const doubts = document.querySelectorAll('.doubt-card');
+    const today = new Date().toISOString().split('T')[0];
+    let todayCount = 0;
+    const subjects = new Set();
+
+    document.querySelectorAll('.doubt-time').forEach(el => {
+      if (el.textContent.startsWith(today)) todayCount++;
+    });
+    document.querySelectorAll('.doubt-tag').forEach(el => {
+      subjects.add(el.textContent.trim());
+    });
+
+    document.getElementById('todayCount').textContent = todayCount;
+    document.getElementById('subjectCount').textContent = subjects.size;
+  });
+
+  // Press Enter to submit
+  document.getElementById('doubtInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter' && e.ctrlKey) askDoubt();
+  });
+</script>
+</body>
+</html>
+
