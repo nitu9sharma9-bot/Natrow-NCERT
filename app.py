@@ -1,7 +1,8 @@
 from flask import Flask, render_template, request, redirect, jsonify, send_from_directory, url_for, flash
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 from flask_bcrypt import Bcrypt
-
+from flask import request
+from datetime import datetime
 from dotenv import load_dotenv
 import os
 
@@ -31,6 +32,22 @@ def allowed_file(filename):
 
 def allowed_img(filename):
     return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_IMG
+
+
+@app.before_request
+def log_visitor():
+    ip = request.remote_addr
+    path = request.path
+    user_agent = request.headers.get('User-Agent')
+
+    with open("visitors.txt", "a", encoding="utf-8") as f:
+        f.write(
+            f"Time: {datetime.now()} | "
+            f"IP: {ip} | "
+            f"Page: {path} | "
+            f"Browser: {user_agent}\n"
+        )
+
 
 # ── DATABASE ──
 def get_db():
@@ -545,7 +562,7 @@ def delete_task(id):
 from google import genai
 
 # ── GEMINI SETUP ──
-GEMINI_API_KEY = os.environ.get("AIzaSyADKFmyS3u6vk0Y7r2xy7nFKCvUaSasKS4")
+GEMINI_API_KEY = os.environ.get("AIzaSyDM6D6PZ-MOG5XVHabdC0EHaXf3Sh8UW6k")
 
 client = genai.Client(api_key=GEMINI_API_KEY)
 
