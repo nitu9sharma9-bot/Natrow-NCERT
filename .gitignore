@@ -1,8 +1,10 @@
-.env
-database.db
+venv/
+.venv/
 __pycache__/
 *.pyc
+database.db
 static/uploads/
+.env
 *.mp4
 *.mkv
 *.avi
