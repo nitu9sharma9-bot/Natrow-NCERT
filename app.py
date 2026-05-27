@@ -545,7 +545,7 @@ def delete_task(id):
 from google import genai
 
 # ── GEMINI SETUP ──
-GEMINI_API_KEY = "AIzaSyADKFmyS3u6vk0Y7r2xy7nFKCvUaSasKS4"
+GEMINI_API_KEY = os.environ.get("AIzaSyADKFmyS3u6vk0Y7r2xy7nFKCvUaSasKS4")
 
 client = genai.Client(api_key=GEMINI_API_KEY)
 
