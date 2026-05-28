@@ -5,8 +5,7 @@ from flask import request
 from datetime import datetime
 from dotenv import load_dotenv
 import os
-from flask_sqlalchemy import SQLAlchemy
-from flask_login import LoginManager, UserMixin
+
 load_dotenv()
 
 print("KEY FOUND:", bool(os.getenv("GEMINI_API_KEY")))
@@ -48,24 +47,6 @@ def log_visitor():
             f"Page: {path} | "
             f"Browser: {user_agent}\n"
         )
-
-app.config['SECRET_KEY'] = 'AIzaSyDM6D6PZ-MOG5XVHabdC0EHaXf3Sh8UW6k'
-
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///users.db'
-
-db = SQLAlchemy(app)
-
-login_manager = LoginManager()
-login_manager.init_app(app)
-login_manager.login_view = "login"
-
-
-class User(UserMixin, db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-
-    username = db.Column(db.String(100), unique=True)
-
-    password = db.Column(db.String(200))
 
 
 # ── DATABASE ──
@@ -576,24 +557,7 @@ def delete_task(id):
     conn.close()
     return jsonify({"status": "deleted"})
 
-from flask_login import login_required, current_user
 
-@app.route("/dashboard")
-@login_required
-def dashboard():
-
-    return f"Welcome {current_user.username}"
-
-
-from flask_login import logout_user
-
-@app.route("/logout")
-@login_required
-def logout():
-
-    logout_user()
-
-    return redirect("/")
 # ── AI PLANNER ──
 from google import genai
 
@@ -1164,5 +1128,3 @@ def delete_connection():
 # ── RUN ──
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
-    with app.app_context():
-            db.create_all()
