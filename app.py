@@ -1,16 +1,15 @@
 from flask import Flask, render_template, request, redirect, jsonify, send_from_directory, url_for, flash
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 from flask_bcrypt import Bcrypt
-from flask import request
 from datetime import datetime
 from dotenv import load_dotenv
+from google import genai
+import sqlite3
 import os
+from werkzeug.utils import secure_filename
 
 load_dotenv()
 
-import sqlite3
-from werkzeug.utils import secure_filename
-from datetime import datetime
 app = Flask(__name__)
 app.secret_key = "studyos_secret_key_2025"
 
@@ -31,21 +30,10 @@ def allowed_file(filename):
 def allowed_img(filename):
     return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_IMG
 
-
-@app.before_request
-def log_visitor():
-    ip = request.remote_addr
-    path = request.path
-    user_agent = request.headers.get('User-Agent')
-
-    with open("visitors.txt", "a", encoding="utf-8") as f:
-        f.write(
-            f"Time: {datetime.now()} | "
-            f"IP: {ip} | "
-            f"Page: {path} | "
-            f"Browser: {user_agent}\n"
-        )
-
+# ── GEMINI SETUP ──
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+print("KEY FOUND:", bool(GEMINI_API_KEY))
+client = genai.Client(api_key=GEMINI_API_KEY)
 
 # ── DATABASE ──
 def get_db():
@@ -202,6 +190,18 @@ def init_db():
     )
     """)
 
+    # ✅ doubts table here not inside route
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS doubts(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER,
+        question TEXT,
+        answer TEXT,
+        subject TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+    """)
+
     conn.commit()
     conn.close()
 
@@ -224,9 +224,23 @@ def load_user(user_id):
     u = conn.execute("SELECT * FROM users WHERE id=?", (user_id,)).fetchone()
     conn.close()
     if u:
-        return User(u['id'], u['username'], u['email'], u['bio'], u['exam'], u['class_year'], u['avatar'])
+        return User(u['id'], u['username'], u['email'], u['bio'],
+                    u['exam'], u['class_year'], u['avatar'])
     return None
 
+# ── VISITOR LOG ──
+@app.before_request
+def log_visitor():
+    ip = request.remote_addr
+    path = request.path
+    user_agent = request.headers.get('User-Agent')
+    with open("visitors.txt", "a", encoding="utf-8") as f:
+        f.write(
+            f"Time: {datetime.now()} | "
+            f"IP: {ip} | "
+            f"Page: {path} | "
+            f"Browser: {user_agent}\n"
+        )
 
 # ── AUTH ──
 @app.route("/register", methods=["GET", "POST"])
@@ -249,7 +263,8 @@ def register():
 
         if existing:
             conn.close()
-            return render_template("register.html", error="Username or email already taken!")
+            return render_template("register.html",
+                error="Username or email already taken!")
 
         hashed = bcrypt.generate_password_hash(password).decode("utf-8")
 
@@ -288,10 +303,12 @@ def login():
         conn.close()
 
         if u and bcrypt.check_password_hash(u['password'], password):
-            user = User(u['id'], u['username'], u['email'], u['bio'], u['exam'], u['class_year'], u['avatar'])
+            user = User(u['id'], u['username'], u['email'], u['bio'],
+                        u['exam'], u['class_year'], u['avatar'])
             login_user(user)
             return redirect("/")
-        return render_template("login.html", error="Wrong username or password!")
+        return render_template("login.html",
+            error="Wrong username or password!")
 
     return render_template("login.html", error=None)
 
@@ -316,7 +333,8 @@ def profile():
         if "avatar" in request.files:
             file = request.files["avatar"]
             if file and file.filename != "" and allowed_img(file.filename):
-                filename = secure_filename("avatar_" + current_user.username + "_" + file.filename)
+                filename = secure_filename(
+                    "avatar_" + current_user.username + "_" + file.filename)
                 file.save(os.path.join(app.config["UPLOAD_FOLDER"], filename))
                 avatar = "/static/uploads/" + filename
 
@@ -360,7 +378,8 @@ def home():
     schedule_done = sum(1 for s in schedule if s['done'] == 1)
 
     streak = cur.execute(
-        "SELECT COUNT(DISTINCT DATE(created_at)) FROM progress WHERE user_id=?", (uid,)
+        "SELECT COUNT(DISTINCT DATE(created_at)) FROM progress WHERE user_id=?",
+        (uid,)
     ).fetchone()[0]
 
     conn.close()
@@ -556,193 +575,51 @@ def delete_task(id):
     return jsonify({"status": "deleted"})
 
 
-# ── AI PLANNER ──
-from google import genai
-
-# ── GEMINI SETUP ──
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
-
-client = genai.Client(api_key=GEMINI_API_KEY)
-
-
 # ── AI PLAN ──
 @app.route("/ai_plan", methods=["POST"])
 @login_required
 def ai_plan():
-
     topic = request.form.get("topic", "").strip()
-
     if not topic:
-        return jsonify({
-            "plan": "Please enter a topic."
-        })
+        return jsonify({"plan": "Please enter a topic."})
 
     try:
+        prompt = f"""You are a study planner for JEE/NEET students.
+Create a detailed 4-day study plan for: {topic}
 
-        prompt = f"""
-You are a study planner for JEE/NEET students.
+Format exactly like this:
+Day 1 — [Topic Name]
+- Task 1
+- Task 2
+- Time: X hours
 
-Create a 4-day study plan for:
+Day 2 — [Topic Name]
+- Task 1
+- Task 2
+- Time: X hours
 
-{topic}
+Day 3 — [Topic Name]
+- Task 1
+- Task 2
+- Time: X hours
 
-Format:
-Day 1
-- tasks
+Day 4 — [Topic Name]
+- Task 1
+- Task 2
+- Time: X hours
 
-Day 2
-- tasks
-"""
+Keep it practical and specific for Indian competitive exams."""
 
         response = client.models.generate_content(
             model="gemini-2.5-flash",
             contents=prompt
         )
-
-        plan = response.text
-
-        return jsonify({
-            "plan": plan
-        })
+        return jsonify({"plan": response.text})
 
     except Exception as e:
-
         print("AI PLAN ERROR:", e)
+        return jsonify({"plan": f"AI Error: {str(e)}"})
 
-        return jsonify({
-            "plan": f"AI Error: {str(e)}"
-        })
-
-
-# ── AI DOUBT SOLVER ──
-@app.route("/doubt", methods=["GET", "POST"])
-@login_required
-def doubt():
-    conn = get_db()
-    cur = conn.cursor()
-    uid = current_user.id
-
-    cur.execute("""
-    CREATE TABLE IF NOT EXISTS doubts(
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER,
-        question TEXT,
-        answer TEXT,
-        subject TEXT,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )
-    """)
-    conn.commit()
-
-    if request.method == "POST":
-        question = request.form.get("question", "").strip()
-        subject = request.form.get("subject", "General").strip()
-
-        try:
-            prompt = f"""You are an expert tutor for Indian competitive exams (JEE/NEET/UPSC).
-A student has this doubt in {subject}:
-
-{question}
-
-Give a clear, step-by-step explanation. Use:
-- Simple language
-- Examples where needed
-- Formulas if relevant
-- Key points at the end
-
-Be concise but complete."""
-
-            response = client.models.generate_content(
-                model="gemini-2.5-flash",
-                   contents=prompt
-)
-
-            answer = response.text
-        except Exception as e:
-            answer = "Sorry, AI is unavailable right now. Please try again later."
-
-        cur.execute(
-            "INSERT INTO doubts(user_id, question, answer, subject) VALUES(?,?,?,?)",
-            (uid, question, answer, subject)
-        )
-        conn.commit()
-
-    doubts = cur.execute(
-        "SELECT * FROM doubts WHERE user_id=? ORDER BY id DESC", (uid,)
-    ).fetchall()
-    conn.close()
-    return render_template("doubt.html", doubts=doubts)
-
-
-@app.route("/ask_doubt", methods=["POST"])
-@login_required
-def ask_doubt():
-
-    data = request.get_json()
-
-    question = data.get("question", "").strip()
-    subject = data.get("subject", "General")
-
-    if not question:
-        return jsonify({
-            "answer": "Please enter a question."
-        })
-
-    try:
-
-        prompt = f"""
-You are an expert Indian tutor.
-
-Subject: {subject}
-
-Question:
-{question}
-
-Explain clearly with examples.
-"""
-
-        response = client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=prompt
-        )
-
-        answer = response.text
-
-        return jsonify({
-            "answer": answer
-        })
-
-    except Exception as e:
-
-        print("ASK DOUBT ERROR:", e)
-
-        return jsonify({
-            "answer": f"AI Error: {str(e)}"
-        })
-        # Save to DB
-        conn = get_db()
-        conn.execute(
-            "INSERT INTO doubts(user_id, question, answer, subject) VALUES(?,?,?,?)",
-            (current_user.id, question, answer, subject)
-        )
-        conn.commit()
-        conn.close()
-
-    except Exception as e:
-        answer = "AI is unavailable right now. Try again in a moment."
-
-    return jsonify({"answer": answer})
-
-
-@app.route("/delete_doubt/<int:id>", methods=["POST"])
-@login_required
-def delete_doubt(id):
-    conn = get_db()
-    conn.execute("DELETE FROM doubts WHERE id=? AND user_id=?",
-                 (id, current_user.id))
-    conn.commit()
-    conn.close()
-    return jsonify({"status": "deleted"})
 
 # ── AI SAVE ──
 @app.route("/ai_save", methods=["POST"])
@@ -758,6 +635,78 @@ def ai_save():
     conn.commit()
     conn.close()
     return jsonify({"status": "saved"})
+
+
+# ── DOUBT PAGE ──
+@app.route("/doubt")
+@login_required
+def doubt():
+    conn = get_db()
+    doubts = conn.execute(
+        "SELECT * FROM doubts WHERE user_id=? ORDER BY id DESC",
+        (current_user.id,)
+    ).fetchall()
+    conn.close()
+    return render_template("doubt.html", doubts=doubts)
+
+
+# ── ASK DOUBT (AJAX) ──
+@app.route("/ask_doubt", methods=["POST"])
+@login_required
+def ask_doubt():
+    data = request.get_json()
+    question = data.get("question", "").strip()
+    subject = data.get("subject", "General")
+
+    if not question:
+        return jsonify({"answer": "Please enter a question."})
+
+    try:
+        prompt = f"""You are an expert tutor for Indian competitive exams (JEE/NEET/UPSC).
+A student has this doubt in {subject}:
+
+{question}
+
+Give a clear, step-by-step explanation with:
+- Simple language
+- Examples where needed
+- Formulas if relevant
+- Key points at the end
+
+Be concise but complete."""
+
+        response = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=prompt
+        )
+        answer = response.text
+
+        # ✅ Save to DB before return
+        conn = get_db()
+        conn.execute(
+            "INSERT INTO doubts(user_id, question, answer, subject) VALUES(?,?,?,?)",
+            (current_user.id, question, answer, subject)
+        )
+        conn.commit()
+        conn.close()
+
+    except Exception as e:
+        print("ASK DOUBT ERROR:", e)
+        answer = f"AI Error: {str(e)}"
+
+    return jsonify({"answer": answer})
+
+
+# ── DELETE DOUBT ──
+@app.route("/delete_doubt/<int:id>", methods=["POST"])
+@login_required
+def delete_doubt(id):
+    conn = get_db()
+    conn.execute("DELETE FROM doubts WHERE id=? AND user_id=?",
+                 (id, current_user.id))
+    conn.commit()
+    conn.close()
+    return jsonify({"status": "deleted"})
 
 
 # ── NOTES ──
@@ -918,8 +867,6 @@ def fc_add_card():
     data = request.get_json()
     conn = get_db()
     cur = conn.cursor()
-
-    # ✅ Verify folder belongs to user
     folder = cur.execute(
         "SELECT * FROM fc_folders WHERE id=? AND user_id=?",
         (data["folder_id"], current_user.id)
@@ -927,7 +874,6 @@ def fc_add_card():
     if not folder:
         conn.close()
         return jsonify({"status": "forbidden"}), 403
-
     cur.execute(
         "INSERT INTO fc_cards(user_id, folder_id, question, answer, emoji, color) VALUES(?,?,?,?,?,?)",
         (current_user.id, data["folder_id"], data["question"],
@@ -1079,8 +1025,6 @@ def delete_node(id):
 def save_connection():
     data = request.get_json()
     conn = get_db()
-
-    # ✅ Both nodes must belong to current user
     from_node = conn.execute(
         "SELECT * FROM nodes WHERE id=? AND user_id=?",
         (data["from_id"], current_user.id)
@@ -1089,16 +1033,13 @@ def save_connection():
         "SELECT * FROM nodes WHERE id=? AND user_id=?",
         (data["to_id"], current_user.id)
     ).fetchone()
-
     if not from_node or not to_node:
         conn.close()
         return jsonify({"status": "forbidden"}), 403
-
     existing = conn.execute(
         "SELECT * FROM node_connections WHERE from_id=? AND to_id=? AND user_id=?",
         (data["from_id"], data["to_id"], current_user.id)
     ).fetchone()
-
     if not existing:
         conn.execute(
             "INSERT INTO node_connections(user_id, from_id, to_id) VALUES(?,?,?)",
@@ -1125,4 +1066,4 @@ def delete_connection():
 
 # ── RUN ──
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
+    app.run(host="0.0.0.0", port=5000, debug=True)
