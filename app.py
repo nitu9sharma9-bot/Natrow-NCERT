@@ -8,8 +8,6 @@ import os
 
 load_dotenv()
 
-print("KEY FOUND:", bool(os.getenv("GEMINI_API_KEY")))
-
 import sqlite3
 from werkzeug.utils import secure_filename
 from datetime import datetime
@@ -562,7 +560,7 @@ def delete_task(id):
 from google import genai
 
 # ── GEMINI SETUP ──
-GEMINI_API_KEY = os.environ.get("AIzaSyDM6D6PZ-MOG5XVHabdC0EHaXf3Sh8UW6k")
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 
 client = genai.Client(api_key=GEMINI_API_KEY)
 
